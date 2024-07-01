@@ -176,7 +176,7 @@ pub fn ensure_running_doas() -> Result<(String, u32), std::io::Error> {
     unreachable!()
 }
 
-pub fn doas(
+fn doas(
     executable: impl Into<Argument>,
     args: impl IntoIterator<Item = impl Into<Argument>>,
 ) -> Result<(), std::ffi::NulError> {
