@@ -57,13 +57,13 @@ impl SetAction {
 }
 
 #[derive(Debug)]
-pub struct Term<I: Read, O: AsRawFd> {
+pub struct Term<I, O> {
     fd_out: O,
     fd_in: I,
     orig_t: termios,
     t: termios,
 }
-impl<I: Read, O: AsRawFd> std::io::Read for Term<I, O> {
+impl<I: Read, O> std::io::Read for Term<I, O> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.fd_in.read(buf)
     }
