@@ -155,6 +155,10 @@ pub fn underscored_heading(msg: impl AsRef<str>) {
     _ = writeln!(guard, "");
 }
 
+pub fn is_root_user() -> bool {
+    nix::unistd::geteuid().is_root()
+}
+
 // Checks euid, execs this process with doas if not root.
 // Sets DOAS_UID to the current euid prior to exec.
 // Returns the DOAS_USER and DOAS_UID env variable after exec
@@ -162,7 +166,7 @@ pub fn ensure_running_doas() -> Result<(String, u32), std::io::Error> {
     let euid = nix::unistd::geteuid();
     if euid.is_root() {
         let user =
-            std::env::var("DOAS_USER").expect("Should have found DOAS_USER environment variable");
+            std::env::var("DOAS_USER").expect("Should be running with doas");
         let uid = std::env::var("DOAS_UID")
             .expect("Should have found DOAS_UID environment variable")
             .parse::<u32>()
@@ -180,6 +184,7 @@ fn doas(
     executable: impl Into<Argument>,
     args: impl IntoIterator<Item = impl Into<Argument>>,
 ) -> Result<(), std::ffi::NulError> {
+    // TODO: make this configurable? rely on PATH instead?
     let doas_path = PathBuf::from("/usr/bin/doas");
     if !doas_path.exists() {
         panic!("doas utility not found");

@@ -22,7 +22,7 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
 name = "creche"
-version = "0.2.0"
+version = "0.2.2"
 dependencies = [
  "nix",
 ]
@@ -72,6 +72,7 @@ name = "scripting"
 version = "0.1.0"
 dependencies = [
  "creche",
+ "libc",
  "nix",
  "nom",
 ]
