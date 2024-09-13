@@ -28,8 +28,8 @@ impl Password {
     }
     /// Convenience method for reading a newline terminated input from the
     /// given Reader. Removes the trailing newline from the input. If the
-    /// input is larger than `PASSWORD_BUFFER_LEN`, returns
-    /// std::io::ErrorKind::InvalidData.
+    /// input is larger than `PASSWORD_BUFFER_LEN`, returns an error of
+    /// `std::io::ErrorKind::InvalidData`.
     pub fn read_line(&mut self, mut fd: &mut impl Read) -> io::Result<()> {
         let mut index = 0;
         loop {
