@@ -10,8 +10,8 @@ use libc::{
     c_int,
     termios,
 };
-mod password;
-pub use password::*;
+pub mod password;
+use password::*;
 
 // input flags (iflag)
 pub use libc::{
