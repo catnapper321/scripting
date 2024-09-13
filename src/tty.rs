@@ -68,6 +68,15 @@ impl<I: Read, O> std::io::Read for Term<I, O> {
         self.fd_in.read(buf)
     }
 }
+impl<I, O: Write> std::io::Write for Term<I, O> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.fd_out.write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.fd_out.flush()
+    }
+}
 impl<O: AsRawFd + Write, I: Read> Term<I, O> {
     pub fn new(fd_in: I, fd_out: O) -> io::Result<Self> {
         let orig_t = get_termios(fd_out.as_raw_fd())?;
@@ -92,7 +101,7 @@ impl<O: AsRawFd + Write, I: Read> Term<I, O> {
     /// cooked mode: sets ECHO, ECHONL, ICANON.
     /// Note that this is the bare minimum to get utf input awareness and
     /// character display; it does not restore flow control, unset the input
-    /// timeout, etc. The [`reset()`] method is a more generally useful way
+    /// timeout, etc. The `.reset()` method is a more generally useful way
     /// to recover from raw and password modes.
     pub fn cooked_mode(&mut self) -> &mut Self {
         self.t.c_lflag |= (ECHO | ECHONL | ICANON);
