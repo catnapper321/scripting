@@ -8,6 +8,7 @@ use std::{
     os::unix::ffi::{OsStrExt, OsStringExt},
 };
 pub use creche::*;
+mod tty;
 
 #[derive(Debug)]
 pub struct Keystroke([u8; 4]);
