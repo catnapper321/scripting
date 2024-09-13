@@ -56,17 +56,23 @@ impl SetAction {
 }
 
 #[derive(Debug)]
-pub struct Term {
-    fd: RawFd, 
+pub struct Term<I: Read, O: AsRawFd> {
+    fd_out: O,
+    fd_in: I,
     orig_t: termios,
     t: termios,
 }
-impl Term {
-    pub fn new(fd: impl AsRawFd) -> io::Result<Self> {
-        let fd = fd.as_raw_fd();
-        let orig_t = get_termios(fd)?;
+impl<I: Read, O: AsRawFd> std::io::Read for Term<I, O> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.fd_in.read(buf)
+    }
+}
+impl<O: AsRawFd + Write, I: Read> Term<I, O> {
+    pub fn new(fd_in: I, fd_out: O) -> io::Result<Self> {
+        let orig_t = get_termios(fd_out.as_raw_fd())?;
         Ok(Self {
-            fd,
+            fd_out,
+            fd_in,
             orig_t,
             t: orig_t.clone(),
         })
@@ -137,20 +143,18 @@ impl Term {
         self
     }
     /// Convenience function that sets the terminal to password
-    /// mode, prompts for a password, and resets the terminal. Uses
-    /// [`default_termios()`] internally, and so requires [`init()`] to be
-    /// called first.
+    /// mode, prompts for a password, and resets the terminal.
     pub fn prompt_for_password(&mut self, prompt: impl std::fmt::Display) -> io::Result<Password> {
         self.password_mode().set(SetAction::TCSAFLUSH)?;
         let mut pw = Password::new();
         print!("{}: ", prompt);
-        stdout().flush()?;
-        pw.read_line(stdin())?;
+        self.fd_out.flush()?;
+        pw.read_line(&mut self.fd_in)?;
         self.reset(SetAction::TCSAFLUSH)?;
         Ok(pw)
     }
     pub fn set(&self, action: SetAction) -> io::Result<()> {
-        set_termios(self.fd.clone(), action, &self.t)?;
+        set_termios(self.fd_out.as_raw_fd(), action, &self.t)?;
         Ok(())
     }
     pub fn reset(&mut self, action: SetAction) -> io::Result<()> {

@@ -9,6 +9,7 @@ use std::{
 };
 pub use creche::*;
 mod tty;
+use tty::*;
 
 #[derive(Debug)]
 pub struct Keystroke([u8; 4]);
