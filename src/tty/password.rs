@@ -3,12 +3,24 @@ use std::{
     io::{self, Read},
 };
 
-const PASSWORD_BUFFER_LEN: usize = 512;
-/// Type that owns a heap allocated buffer that will not reallocate to
-/// accomodate input greater than PASSWORD_BUFFER_LEN bytes. When dropped,
-/// it overwrites the buffer contents with nul bytes. Users must ensure
-/// that the buffer contains at least one nul byte before calling
-/// [`as_cstr()`] or [`as_str()`].
+pub const PASSWORD_BUFFER_LEN: usize = 512;
+/// Type that owns a buffer on the heap that will not reallocate. It is
+/// intended to hold user entered password data. When dropped, it
+/// overwrites the buffer contents with nul bytes.
+///
+/// The fixed buffer size, defined by `PASSWORD_BUFFER_LENGTH`, should
+/// allow it to hold very long UTF8 password data.
+///
+/// Example:
+/// ```
+/// let mut pw = Password::new();
+/// pw.read_line(std::io::stdin())?;
+/// if pw.as_str() == "SECRET" {
+///     println!("password is correct");
+/// } else {
+///     println!("wrong password");
+/// }
+/// ```
 pub struct Password {
     buf: Box<[u8; PASSWORD_BUFFER_LEN]>,
 }
@@ -16,13 +28,17 @@ impl Password {
     pub fn new() -> Self {
         Self { buf: Box::new([0; PASSWORD_BUFFER_LEN]) }
     }
+    /// Returns true if the buffer's last byte is a nul
     pub fn is_nul_terminated(&self) -> bool {
         self.buf[PASSWORD_BUFFER_LEN - 1] == 0
     }
-    /// Panics if the buffer does not contain a nul byte
+    /// Returns a &CStr to the buffer data. Panics if the buffer does not
+    /// contain a nul byte
     pub fn as_cstr(&self) -> &CStr {
         CStr::from_bytes_until_nul(self.buf.as_slice()).expect("Password buffer requires terminating nul byte")
     }
+    /// Returns a &str if the buffer contains UTF8 data. Panics if the buffer
+    /// does not contain a nul byte
     pub fn as_str(&self) -> Result<&str, std::str::Utf8Error> {
         self.as_cstr().to_str()
     }
