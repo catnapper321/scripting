@@ -35,14 +35,15 @@ pub use libc::{
     ISIG
 };
 
-/// specify behavior of tcsetattr
+/// Specifies behavior of libc::tcsetattr
 #[derive(Debug, Clone, Copy)]
 pub enum SetAction {
-    /// flush output buffer to terminal, discard unprocessed input buffer
+    /// Flushes the terminal output buffer, discarding unprocessed input
+    /// buffer data
     TCSAFLUSH,
-    /// apply changes immediately, disregarding buffer states
+    /// Applies changes immediately. Buffers are not affected.
     TCSANOW,
-    /// flush output buffer to terminal, keep input buffer
+    /// Flushes the terminal output buffer, and keeps the input buffer.
     TCSADRAIN,
 }
 impl SetAction {
@@ -77,7 +78,7 @@ impl<O: AsRawFd + Write, I: Read> Term<I, O> {
             t: orig_t.clone(),
         })
     }
-    /// raw mode: unset ECHO and ICANON, disable output flow control, disable
+    /// raw mode: unsets ECHO and ICANON, disable output flow control, disable
     /// ctrl-v, disable carriage return translation (ctrl-m), disable ctrl-c
     /// signalling, and some other stuff. Note that this function disables
     /// output processing (auto carriage return insert).
@@ -88,10 +89,11 @@ impl<O: AsRawFd + Write, I: Read> Term<I, O> {
         self.t.c_cflag &= ! libc::CS8;
         self
     }
-    /// cooked mode: set ECHO, ECHONL, ICANON
-    /// note that this does the bare minimum to get utf input awareness and
+    /// cooked mode: sets ECHO, ECHONL, ICANON.
+    /// Note that this is the bare minimum to get utf input awareness and
     /// character display; it does not restore flow control, unset the input
-    /// timeout, etc.
+    /// timeout, etc. The [`reset()`] method is a more generally useful way
+    /// to recover from raw and password modes.
     pub fn cooked_mode(&mut self) -> &mut Self {
         self.t.c_lflag |= (ECHO | ECHONL | ICANON);
         self
@@ -153,10 +155,12 @@ impl<O: AsRawFd + Write, I: Read> Term<I, O> {
         self.reset(SetAction::TCSAFLUSH)?;
         Ok(pw)
     }
+    /// Applies all changes to the terminal
     pub fn set(&self, action: SetAction) -> io::Result<()> {
         set_termios(self.fd_out.as_raw_fd(), action, &self.t)?;
         Ok(())
     }
+    /// Restores the terminal to its original state
     pub fn reset(&mut self, action: SetAction) -> io::Result<()> {
         self.t = self.orig_t.clone();
         self.set(action)
