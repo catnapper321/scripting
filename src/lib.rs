@@ -1,18 +1,27 @@
 #![allow(dead_code, unused)]
 use std::{
     io::{self, Write, Read, stdout, stdin}, 
+    os::fd::AsRawFd,
     fmt::Display,
     process::Command,
     path::{Path, PathBuf},
     ffi::{CString, CStr, OsStr, OsString},
     os::unix::ffi::{OsStrExt, OsStringExt},
+    ops::{Deref, DerefMut},
 };
-pub use creche::*;
-pub mod tty;
+pub use creche::Argument;
+mod tty;
+pub use tty::{Term, SetAction, password::Password};
 
 #[derive(Debug)]
 pub struct Keystroke([u8; 4]);
 impl Keystroke {
+    pub fn new() -> Self {
+        Self([0; 4])
+    }
+    pub fn is_empty(&self) -> bool {
+        self.0 == [0, 0, 0, 0]
+    }
     pub fn is_ctrl_c(&self) -> bool {
         self.0 == [3, 0, 0, 0]
     }

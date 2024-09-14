@@ -10,11 +10,8 @@ use libc::{
     c_int,
     termios,
 };
-pub mod password;
-use password::*;
-
 // input flags (iflag)
-pub use libc::{
+use libc::{
     IXON,
     ICRNL,
     IUTF8,
@@ -23,17 +20,20 @@ pub use libc::{
     ISTRIP,
 };
 // output flags (oflag)
-pub use libc::{
+use libc::{
     OPOST,
 };
 // misc flags (lflag)
-pub use libc::{
+use libc::{
     ECHO,
     ECHONL, 
     ICANON,
     IEXTEN,
     ISIG
 };
+// exports
+pub mod password;
+use password::*;
 
 /// Specifies behavior of libc::tcsetattr
 #[derive(Debug, Clone, Copy)]
@@ -56,6 +56,33 @@ impl SetAction {
     }
 }
 
+/// Struct that encapsulates terminal option setting. It has convenience
+/// methods for setting raw mode, cooked mode, password (noecho) mode, and
+/// resetting the terminal.
+///
+/// `.new()` takes two arguments: the first should implement io::Read, and
+/// the second should implement both io::Write and fd::AsRawFd. For a
+/// terminal application, these will likely be stdin and stdout,
+/// respectively. Note that the fd associated with the second parameter
+/// will be the target for the terminal ioctls.
+///
+/// Example:
+///
+/// ```
+/// use std::io::{stdin, stdout};
+/// let mut t = Term::new(stdin(), stdout())?;
+/// // set raw mode
+/// t.raw_mode()
+///     .set(SetAction::TCSAFLUSH)?;
+/// // read a keystroke into a buffer
+/// let mut buf = [0u8; 4];
+/// // Term implements the io::Read trait (and Write, too)
+/// let bytes_read = t.read(&mut buf)?;
+/// // Term remembers the state of the terminal when it was created
+/// t.reset(SetAction::TCSANOW)?;
+/// println!("read {} bytes", bytes_read);
+/// println!("buffer is {:?}", buf);
+/// ```
 #[derive(Debug)]
 pub struct Term<I, O> {
     fd_out: O,
@@ -77,7 +104,7 @@ impl<I, O: Write> std::io::Write for Term<I, O> {
         self.fd_out.flush()
     }
 }
-impl<O: AsRawFd + Write, I: Read> Term<I, O> {
+impl<O: AsRawFd, I> Term<I, O> {
     pub fn new(fd_in: I, fd_out: O) -> io::Result<Self> {
         let orig_t = get_termios(fd_out.as_raw_fd())?;
         Ok(Self {
@@ -153,17 +180,6 @@ impl<O: AsRawFd + Write, I: Read> Term<I, O> {
         self.t.c_cc[libc::VTIME] = 0;
         self
     }
-    /// Convenience function that sets the terminal to password
-    /// mode, prompts for a password, and resets the terminal.
-    pub fn prompt_for_password(&mut self, prompt: impl std::fmt::Display) -> io::Result<Password> {
-        self.password_mode().set(SetAction::TCSAFLUSH)?;
-        let mut pw = Password::new();
-        print!("{}: ", prompt);
-        self.fd_out.flush()?;
-        pw.read_line(&mut self.fd_in)?;
-        self.reset(SetAction::TCSAFLUSH)?;
-        Ok(pw)
-    }
     /// Applies all changes to the terminal
     pub fn set(&self, action: SetAction) -> io::Result<()> {
         set_termios(self.fd_out.as_raw_fd(), action, &self.t)?;
@@ -173,6 +189,19 @@ impl<O: AsRawFd + Write, I: Read> Term<I, O> {
     pub fn reset(&mut self, action: SetAction) -> io::Result<()> {
         self.t = self.orig_t.clone();
         self.set(action)
+    }
+}
+impl<I: Read, O: AsRawFd + Write> Term<I, O> {
+    /// Convenience function that sets the terminal to password
+    /// mode, prompts for a password, and resets the terminal.
+    pub fn prompt_for_password(&mut self, prompt: impl std::fmt::Display) -> io::Result<Password> {
+        self.password_mode().set(SetAction::TCSAFLUSH)?;
+        let mut pw = Password::new();
+        write!(self, "{}: ", prompt)?;
+        self.fd_out.flush()?;
+        pw.read_line(&mut self.fd_in)?;
+        self.reset(SetAction::TCSAFLUSH)?;
+        Ok(pw)
     }
 }
 
