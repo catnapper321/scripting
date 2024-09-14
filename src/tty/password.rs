@@ -62,6 +62,12 @@ impl Password {
         }
         Ok(())
     }
+    pub fn as_slice(&self) -> &[u8] {
+        self.buf.as_slice()
+    }
+    pub fn as_mut_slice(&mut self) -> &mut [u8] {
+        self.buf.as_mut_slice()
+    }
 }
 impl Drop for Password {
     fn drop(&mut self) {
@@ -70,16 +76,3 @@ impl Drop for Password {
         std::sync::atomic::fence(std::sync::atomic::Ordering::SeqCst);
     }
 }
-impl std::ops::Deref for Password {
-    type Target = [u8; PASSWORD_BUFFER_LEN];
-
-    fn deref(&self) -> &Self::Target {
-        self.buf.as_ref()
-    }
-}
-impl std::ops::DerefMut for Password {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.buf.as_mut()
-    }
-}
-
