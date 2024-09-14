@@ -62,9 +62,17 @@ impl Password {
         }
         Ok(())
     }
+    /// Returns a slice for the buffer
     pub fn as_slice(&self) -> &[u8] {
         self.buf.as_slice()
     }
+    /// Returns a mutable slice for the buffer. Example:
+    /// ```
+    /// let stdin = std::io::stdin();
+    /// let mut pw = Password::new();
+    /// // read directly into the Password buffer
+    /// let bytes_read = stdin.read(pw.as_mut_slice()).unwrap();
+    /// ```
     pub fn as_mut_slice(&mut self) -> &mut [u8] {
         self.buf.as_mut_slice()
     }

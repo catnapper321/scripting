@@ -28,6 +28,9 @@ impl Keystroke {
     pub fn is_esc(&self) -> bool {
         self.0 == [27, 0, 0, 0]
     }
+    pub fn is_esc_code(&self) -> bool {
+        self.0[0] == 27 && self.0[1] == b'['
+    }
     pub fn is_enter(&self) -> bool {
         self.0[0] == 13
     }
