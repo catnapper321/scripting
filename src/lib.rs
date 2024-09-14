@@ -190,9 +190,9 @@ fn doas(
 ) -> Result<(), std::ffi::NulError> {
     // TODO: make this configurable? rely on PATH instead?
     let doas_path = PathBuf::from("doas");
-    if !doas_path.exists() {
-        panic!("doas utility not found");
-    }
+    // if !doas_path.exists() {
+    //     panic!("doas utility not found");
+    // }
     let doas_bin = CString::new(doas_path.as_os_str().as_bytes())?;
 
     let cstring_args: Vec<CString> = args
