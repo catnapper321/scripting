@@ -35,48 +35,34 @@ impl Keystroke {
         char::from_u32(u32::from_ne_bytes(self.0))
     }
 }
+impl Deref for Keystroke {
+    type Target = [u8; 4];
 
-/// must set tty to raw mode prior to call
-pub fn get_raw_keystroke() -> Result<Keystroke, io::Error> {
-    let mut buf = [0u8; 4];
-    let _bytes_read = stdin().read(&mut buf)?;
-    Ok(Keystroke(buf))
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl DerefMut for Keystroke {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
 }
 
-pub fn set_tty<S>(args: impl IntoIterator<Item = S>) -> Result<(), io::Error> where 
-    S: AsRef<OsStr>,
-{
-    let mut cmd = Command::new("/usr/bin/stty");
-    cmd.args(args);
-    let mut child = cmd.spawn()?;
-    child.wait()?;
-    Ok(())
+/// must set terminal to raw mode prior to call
+pub fn get_raw_keystroke<I: Read, O>(term: &mut tty::Term<I, O>) -> io::Result<Keystroke> {
+    let mut keystroke = Keystroke::new();
+    let n = term.read(keystroke.as_mut_slice())?;
+    Ok(keystroke)
 }
 
-pub fn set_tty_raw_noecho() -> Result<(), io::Error> {
-    set_tty(["raw", "-echo"])
+pub fn keystroke<I: Read, O: AsRawFd>(term: &mut Term<I, O>) -> io::Result<Keystroke> {
+    term.raw_mode().set(SetAction::TCSAFLUSH)?;
+    let keystroke = get_raw_keystroke(term);
+    term.reset(SetAction::TCSANOW)?;
+    keystroke
 }
 
-pub fn set_tty_cooked() -> Result<(), io::Error> {
-    set_tty(["cooked", "echo"])
-}
-
-pub fn keystroke() -> Result<Keystroke, io::Error> {
-    set_tty(["raw"])?;
-    let x = get_raw_keystroke();
-    set_tty_cooked()?;
-    println!("");
-    x
-}
-
-pub fn keystroke_noecho() -> Result<Keystroke, io::Error> {
-    set_tty_raw_noecho()?;
-    let x = get_raw_keystroke();
-    set_tty_cooked()?;
-    x
-}
-
-pub fn prompt_yn(default: Option<bool>, msg: impl Display) -> bool {
+pub fn prompt_yn<I: Read, O: AsRawFd>(term: &mut Term<I, O>, default: Option<bool>, msg: impl Display) -> bool {
     loop {
         if let Some(default) = default {
             if default {
@@ -88,7 +74,7 @@ pub fn prompt_yn(default: Option<bool>, msg: impl Display) -> bool {
             print!("{} [yn]? ", msg);
         }
         _ = stdout().flush();
-        let keystroke = keystroke().unwrap();
+        let keystroke = keystroke(term).unwrap();
         if keystroke.is_enter() {
             if let Some(default) = default {
                 return default;
@@ -104,20 +90,22 @@ pub fn prompt_yn(default: Option<bool>, msg: impl Display) -> bool {
     }
 }
 
-pub fn press_any_key() {
-    println!("Press any key to continue.");
-    _ = stdout().flush();
-    _ = keystroke_noecho();
+pub fn press_any_key<I: Read, O: AsRawFd + Write>(term: &mut Term<I, O>) {
+    writeln!(term, "Press any key to continue.");
+    _ = term.flush();
+    _ = term.raw_mode().set(SetAction::TCSAFLUSH);
+    _ = keystroke(term);
+    _ = term.reset(SetAction::TCSANOW);
 }
 
-pub fn prompt_menu(
+pub fn prompt_menu<I: Read, O: AsRawFd + Write>(
+    term: &mut Term<I, O>,
     default: Option<char>,
     prompt: impl AsRef<str>,
     menu: impl IntoIterator<Item = impl AsRef<str>>,
 ) -> char {
     let mut choices = String::new();
     // print the menu
-    // println!("");
     for line in menu {
         let s: &str = line.as_ref();
         let mut chars = s.char_indices();
@@ -142,7 +130,7 @@ pub fn prompt_menu(
             print!("\n{} [{choices}]? ", prompt.as_ref());
         }
         _ = stdout().flush();
-        let keystroke = keystroke().unwrap();
+        let keystroke = keystroke(term).unwrap();
         if keystroke.is_enter() {
             if let Some(default) = default {
                 return default;
@@ -195,7 +183,7 @@ fn doas(
     args: impl IntoIterator<Item = impl Into<Argument>>,
 ) -> Result<(), std::ffi::NulError> {
     // TODO: make this configurable? rely on PATH instead?
-    let doas_path = PathBuf::from("/usr/bin/doas");
+    let doas_path = PathBuf::from("doas");
     if !doas_path.exists() {
         panic!("doas utility not found");
     }
