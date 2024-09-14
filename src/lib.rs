@@ -13,6 +13,9 @@ pub use creche::Argument;
 mod tty;
 pub use tty::{Term, SetAction, password::Password};
 
+pub type DoasUser = String;
+pub type DoasUid = u32;
+
 #[derive(Debug)]
 pub struct Keystroke([u8; 4]);
 impl Keystroke {
@@ -163,7 +166,7 @@ pub fn is_root_user() -> bool {
 // Checks euid, execs this process with doas if not root.
 // Sets DOAS_UID to the current euid prior to exec.
 // Returns the DOAS_USER and DOAS_UID env variable after exec
-pub fn ensure_running_doas() -> Result<(String, u32), std::io::Error> {
+pub fn ensure_running_doas() -> Result<(DoasUser, DoasUid), std::io::Error> {
     let euid = nix::unistd::geteuid();
     if euid.is_root() {
         let user =
