@@ -3,6 +3,7 @@ use std::{
     io::{self, Read},
 };
 
+/// Buffer size was selected to hold at least 127 utf8 characters.
 pub const PASSWORD_BUFFER_LEN: usize = 512;
 /// Type that owns a buffer on the heap that will not reallocate. It is
 /// intended to hold user entered password data. When dropped, it
