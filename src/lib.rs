@@ -1,3 +1,5 @@
+//! Utilities useful for scripting and programs that run in a terminal.
+
 #![allow(dead_code, unused)]
 pub use creche::Argument;
 use std::{

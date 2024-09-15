@@ -122,10 +122,23 @@ impl<O: AsRawFd, I> Term<I, O> {
         self.t.c_oflag &= !OPOST;
         self
     }
-    /// Enables output processing, so that newlines automatically have carriage
-    /// returns inserted before them
+    /// Enables output processing (OPOST flag). One effect this has is to
+    /// tell the terminal to automatically insert carriage returns before
+    /// newlines in the output. If your output unexpectedly looks like
+    /// this:
+    ///
+    ///     line of text
+    ///                 next line of text
+    ///
+    /// then try enabling output processing.
     pub fn enable_output_processing(&mut self) -> &mut Self {
         self.t.c_oflag |= OPOST;
+        self
+    }
+    /// Sets ECHO and ECHONL. Useful if you want to echo keystrokes in raw
+    /// mode for some reason.
+    pub fn enable_echo(&mut self) -> &mut Self {
+        self.t.c_lflag |= (ECHO | ECHONL);
         self
     }
     /// password mode: unset ECHO, set ECHONL
