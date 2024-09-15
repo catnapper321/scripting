@@ -96,10 +96,11 @@ impl<O: AsRawFd, I> Term<I, O> {
             t: orig_t.clone(),
         })
     }
-    /// raw mode: unsets ECHO and ICANON, disable output flow control,
-    /// disable ctrl-v, disable input carriage return translation (ctrl-m),
-    /// disable ctrl-c signalling, and some other stuff. Note that this
-    /// function disables output processing (auto carriage return insert).
+    /// raw mode: unsets ECHO and ICANON, disables output flow control,
+    /// disables ctrl-v, disables input carriage return translation
+    /// (ctrl-m), disables ctrl-c signalling, and some other stuff. Note
+    /// that this function disables output processing (auto carriage return
+    /// insert).
     pub fn raw_mode(&mut self) -> &mut Self {
         self.t.c_iflag &= !(IXON | ICRNL | BRKINT | INPCK | ISTRIP);
         self.t.c_lflag &= !(ECHO | ICANON | IEXTEN | ISIG);
