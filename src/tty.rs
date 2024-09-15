@@ -96,10 +96,10 @@ impl<O: AsRawFd, I> Term<I, O> {
             t: orig_t.clone(),
         })
     }
-    /// raw mode: unsets ECHO and ICANON, disable output flow control, disable
-    /// ctrl-v, disable carriage return translation (ctrl-m), disable ctrl-c
-    /// signalling, and some other stuff. Note that this function disables
-    /// output processing (auto carriage return insert).
+    /// raw mode: unsets ECHO and ICANON, disable output flow control,
+    /// disable ctrl-v, disable input carriage return translation (ctrl-m),
+    /// disable ctrl-c signalling, and some other stuff. Note that this
+    /// function disables output processing (auto carriage return insert).
     pub fn raw_mode(&mut self) -> &mut Self {
         self.t.c_iflag &= !(IXON | ICRNL | BRKINT | INPCK | ISTRIP);
         self.t.c_lflag &= !(ECHO | ICANON | IEXTEN | ISIG);
@@ -107,11 +107,11 @@ impl<O: AsRawFd, I> Term<I, O> {
         self.t.c_cflag &= !libc::CS8;
         self
     }
-    /// cooked mode: sets ECHO, ECHONL, ICANON.
-    /// Note that this is the bare minimum to get utf input awareness and
-    /// character display; it does not restore flow control, unset the input
-    /// timeout, etc. The `.reset()` method is a more generally useful way
-    /// to recover from raw and password modes.
+    /// cooked mode: sets ECHO, ECHONL, ICANON. Note that this is the bare
+    /// minimum to get utf input awareness and character display; it does
+    /// not restore flow control, unset the input timeout, etc. The
+    /// `.reset()` method is a more reliable way to recover from raw and
+    /// password modes.
     pub fn cooked_mode(&mut self) -> &mut Self {
         self.t.c_lflag |= (ECHO | ECHONL | ICANON);
         self
@@ -145,7 +145,8 @@ impl<O: AsRawFd, I> Term<I, O> {
         self
     }
     /// Set input timeout, granularity is tenths of a second. Values over
-    /// 25.5s are set to 25.5s, values under 0.1s are set to 0.1s
+    /// 25.5s are set to 25.5s, values under 0.1s are set to 0.1s.
+    /// Useful only when the terminal has been set to raw mode.
     pub fn input_timeout(&mut self, vtime: std::time::Duration) -> &mut Self {
         self.t.c_cc[libc::VMIN] = 0; // return immediately after one byte read
         let mut tenths = vtime.as_millis() / 100;
@@ -157,6 +158,7 @@ impl<O: AsRawFd, I> Term<I, O> {
         self.t.c_cc[libc::VTIME] = tenths;
         self
     }
+    /// Disables a previously set input timeout.
     pub fn disable_input_timeout(&mut self) -> &mut Self {
         self.t.c_cc[libc::VMIN] = 1;
         self.t.c_cc[libc::VTIME] = 0;
