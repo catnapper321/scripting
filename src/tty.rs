@@ -38,15 +38,31 @@ impl SetAction {
     }
 }
 
-/// Struct that encapsulates terminal option setting. It has convenience
-/// methods for setting raw mode, cooked mode, password (noecho) mode, and
-/// resetting the terminal.
+/// Terminal option setting usually follows this pattern:
 ///
-/// `.new()` takes two arguments: the first should implement io::Read, and
-/// the second should implement both io::Write and fd::AsRawFd. For a
-/// terminal application, these will likely be stdin and stdout,
-/// respectively. Note that the fd associated with the second parameter
-/// will be the target for the terminal ioctls.
+/// 1. Get the current terminal settings and remember them
+/// 2. Twiddle some bit flags to (hopefully) achieve the desired terminal behavior
+/// 3. Send the settings to the terminal via ioctl
+/// 4. Do stuff
+/// 5. Repeat step 3 with the original terminal settings
+///
+/// This struct abstracts that pattern. It has convenience methods for
+/// setting raw mode, cooked mode, password (noecho) mode, and resetting
+/// the terminal.
+///
+/// [`Self::new()`] takes an input and an output argument. There are
+/// several ways to call this, depending on what you need to do. The output
+/// should always implement the `std::os::fd::AsRawFd` trait. If it also
+/// implements `std::io::Write`, then the returned struct will also
+/// implement `Write` and may be used to print output to the terminal. If
+/// the read argument implements `std::io::Read`, then the returned struct
+/// will also implement `Read` and may be used to get input from the
+/// terminal. These trait implementations are strictly a convenience, and
+/// the standard stream handles obtained from `std::io::{stdout, stdin}`
+/// may be used as usual.
+///
+/// Note that the fd associated with the output argument will be the target
+/// for the terminal ioctls.
 ///
 /// Example:
 ///
@@ -58,7 +74,7 @@ impl SetAction {
 ///     .set(SetAction::TCSAFLUSH)?;
 /// // read a keystroke into a buffer
 /// let mut buf = [0u8; 4];
-/// // Term implements the io::Read trait (and Write, too)
+/// // Term implements io::Read (and Write, too) if it's input / outputs do
 /// let bytes_read = t.read(&mut buf)?;
 /// // Term remembers the state of the terminal when it was created
 /// t.reset(SetAction::TCSANOW)?;
@@ -72,14 +88,14 @@ pub struct Term<I, O> {
     orig_t: termios,
     t: termios,
 }
-/// If the input argument to `::new()` implements `std::io::Read`, then
+/// If the input argument to [`Self::new()`] implements `std::io::Read`, then
 /// Term also gets a `Read` implementation.
 impl<I: Read, O> std::io::Read for Term<I, O> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.fd_in.read(buf)
     }
 }
-/// If the output argument to `::new()` implements `std::io::Write`, then
+/// If the output argument to [`Self::new()`] implements `std::io::Write`, then
 /// Term also gets a `Write` implementation.
 impl<I, O: Write> std::io::Write for Term<I, O> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
@@ -90,22 +106,25 @@ impl<I, O: Write> std::io::Write for Term<I, O> {
         self.fd_out.flush()
     }
 }
-/// There are several ways to use this struct. If all you want to do is set
-/// some terminal options, then the input argument to `::new()` may simply
-/// be set to ():
+/// If all you want to do is set some terminal options, then the input
+/// argument to [`Self::new()`] may simply be set to (), as in this
+/// example:
 ///
 /// ```
+/// # use std::io::Write;
 /// let mut t = Term::new((), 1)?; // stdout is fd 1
 /// t.password_mode().set(SetAction::TCSAFLUSH)?;
-/// // …prompt for a password
+/// print!("Enter the password: ");
+/// std::io::stdout().flush();
+/// // …read the password from stdin
 /// t.reset(SetAction::TCSAFLUSH)?;
 /// ```
 impl<I, O: AsRawFd> Term<I, O> {
-    pub fn new(fd_in: I, fd_out: O) -> io::Result<Self> {
-        let orig_t = get_termios(fd_out.as_raw_fd())?;
+    pub fn new(input: I, output: O) -> io::Result<Self> {
+        let orig_t = get_termios(output.as_raw_fd())?;
         Ok(Self {
-            fd_out,
-            fd_in,
+            fd_out: output,
+            fd_in: input,
             orig_t,
             t: orig_t.clone(),
         })
@@ -212,7 +231,15 @@ impl<I, O: AsRawFd> Term<I, O> {
 impl<I: Read, O: AsRawFd + Write> Term<I, O> {
     /// Convenience function that sets the terminal to password mode,
     /// prompts for a password, and resets the terminal. A `": "` sequence is
-    /// automatically appended to the prompt.
+    /// automatically appended to the prompt, and the trailing newline in the
+    /// input is automatically trimmed. Example:
+    ///
+    /// ```
+    /// # use std::io::{stdin, stdout};
+    /// let mut t = Term::new(stdin(), stdout())?;
+    /// let pw = t.prompt_for_password("Enter the password")?;
+    /// println!("Password entered was {:?}", pw.as_str());
+    /// ```
     pub fn prompt_for_password(&mut self, prompt: impl std::fmt::Display) -> io::Result<Password> {
         self.password_mode().set(SetAction::TCSAFLUSH)?;
         let mut pw = Password::new();

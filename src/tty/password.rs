@@ -74,7 +74,9 @@ impl Password {
     pub fn as_slice(&self) -> &[u8] {
         self.buf.as_slice()
     }
-    /// Returns a mutable slice for the buffer. Example:
+    /// Returns a mutable slice for the buffer. Useful if you would rather
+    /// roll your own input routine and just need a buffer for the secret.
+    /// Remember that the buffer requires a nul byte. Example:
     /// ```
     /// let stdin = std::io::stdin();
     /// let mut pw = Password::new();
