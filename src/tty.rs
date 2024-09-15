@@ -72,11 +72,15 @@ pub struct Term<I, O> {
     orig_t: termios,
     t: termios,
 }
+/// If the input argument to `::new()` implements `std::io::Read`, then
+/// Term also gets a `Read` implementation.
 impl<I: Read, O> std::io::Read for Term<I, O> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.fd_in.read(buf)
     }
 }
+/// If the output argument to `::new()` implements `std::io::Write`, then
+/// Term also gets a `Write` implementation.
 impl<I, O: Write> std::io::Write for Term<I, O> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.fd_out.write(buf)
@@ -86,7 +90,17 @@ impl<I, O: Write> std::io::Write for Term<I, O> {
         self.fd_out.flush()
     }
 }
-impl<O: AsRawFd, I> Term<I, O> {
+/// There are several ways to use this struct. If all you want to do is set
+/// some terminal options, then the input argument to `::new()` may simply
+/// be set to ():
+///
+/// ```
+/// let mut t = Term::new((), 1)?; // stdout is fd 1
+/// t.password_mode().set(SetAction::TCSAFLUSH)?;
+/// // …prompt for a password
+/// t.reset(SetAction::TCSAFLUSH)?;
+/// ```
+impl<I, O: AsRawFd> Term<I, O> {
     pub fn new(fd_in: I, fd_out: O) -> io::Result<Self> {
         let orig_t = get_termios(fd_out.as_raw_fd())?;
         Ok(Self {
@@ -96,7 +110,7 @@ impl<O: AsRawFd, I> Term<I, O> {
             t: orig_t.clone(),
         })
     }
-    /// raw mode: unsets ECHO and ICANON, disables output flow control,
+    /// Raw mode: unsets ECHO and ICANON, disables output flow control,
     /// disables ctrl-v, disables input carriage return translation
     /// (ctrl-m), disables ctrl-c signalling, and some other stuff. Note
     /// that this function disables output processing (auto carriage return
@@ -108,7 +122,7 @@ impl<O: AsRawFd, I> Term<I, O> {
         self.t.c_cflag &= !libc::CS8;
         self
     }
-    /// cooked mode: sets ECHO, ECHONL, ICANON. Note that this is the bare
+    /// Cooked mode: sets ECHO, ECHONL, ICANON. Note that this is the bare
     /// minimum to get utf input awareness and character display; it does
     /// not restore flow control, unset the input timeout, etc. The
     /// `.reset()` method is a more reliable way to recover from raw and
@@ -124,9 +138,8 @@ impl<O: AsRawFd, I> Term<I, O> {
         self
     }
     /// Enables output processing (OPOST flag). One effect this has is to
-    /// tell the terminal to automatically insert carriage returns before
-    /// newlines in the output. If your output unexpectedly looks like
-    /// this:
+    /// tell the terminal to translate newlines in the input to carriage
+    /// return + newline. If your output unexpectedly looks like this:
     ///
     ///     line of text
     ///                 next line of text
@@ -148,18 +161,19 @@ impl<O: AsRawFd, I> Term<I, O> {
         self.t.c_lflag &= !(ECHO | ECHONL);
         self
     }
-    /// password mode: unset ECHO, set ECHONL
+    /// Password mode: Disables keystroke echo, but ensures that newlines
+    /// echo and that utf input is properly handled.
     pub fn password_mode(&mut self) -> &mut Self {
         self.t.c_lflag &= !ECHO;
         self.t.c_lflag |= (ECHONL | ICANON);
         self
     }
-    /// disable output flow control (ctrl-s and ctrl-q)
+    /// Disable output flow control (ctrl-s and ctrl-q)
     pub fn disable_flow_control(&mut self) -> &mut Self {
         self.t.c_iflag &= !IXON;
         self
     }
-    /// enable output flow control (ctrl-s and ctrl-q)
+    /// Enable output flow control (ctrl-s and ctrl-q)
     pub fn enable_flow_control(&mut self) -> &mut Self {
         self.t.c_iflag |= IXON;
         self
@@ -196,8 +210,9 @@ impl<O: AsRawFd, I> Term<I, O> {
     }
 }
 impl<I: Read, O: AsRawFd + Write> Term<I, O> {
-    /// Convenience function that sets the terminal to password
-    /// mode, prompts for a password, and resets the terminal.
+    /// Convenience function that sets the terminal to password mode,
+    /// prompts for a password, and resets the terminal. A `": "` sequence is
+    /// automatically appended to the prompt.
     pub fn prompt_for_password(&mut self, prompt: impl std::fmt::Display) -> io::Result<Password> {
         self.password_mode().set(SetAction::TCSAFLUSH)?;
         let mut pw = Password::new();
