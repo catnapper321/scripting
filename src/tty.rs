@@ -141,6 +141,12 @@ impl<O: AsRawFd, I> Term<I, O> {
         self.t.c_lflag |= (ECHO | ECHONL);
         self
     }
+    /// Unsets ECHO and ECHONL. If you are prompting for a password, use
+    /// `.password_mode()` instead.
+    pub fn disable_echo(&mut self) -> &mut Self {
+        self.t.c_lflag &= !(ECHO | ECHONL);
+        self
+    }
     /// password mode: unset ECHO, set ECHONL
     pub fn password_mode(&mut self) -> &mut Self {
         self.t.c_lflag &= !ECHO;
