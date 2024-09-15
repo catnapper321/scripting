@@ -27,7 +27,9 @@ pub struct Password {
 }
 impl Password {
     pub fn new() -> Self {
-        Self { buf: Box::new([0; PASSWORD_BUFFER_LEN]) }
+        Self {
+            buf: Box::new([0; PASSWORD_BUFFER_LEN]),
+        }
     }
     /// Returns true if the buffer's last byte is a nul
     pub fn is_nul_terminated(&self) -> bool {
@@ -36,7 +38,8 @@ impl Password {
     /// Returns a &CStr to the buffer data. Panics if the buffer does not
     /// contain a nul byte
     pub fn as_cstr(&self) -> &CStr {
-        CStr::from_bytes_until_nul(self.buf.as_slice()).expect("Password buffer requires terminating nul byte")
+        CStr::from_bytes_until_nul(self.buf.as_slice())
+            .expect("Password buffer requires terminating nul byte")
     }
     /// Returns a &str if the buffer contains UTF8 data. Panics if the buffer
     /// does not contain a nul byte
@@ -52,9 +55,13 @@ impl Password {
         loop {
             let buf = &mut self.buf[index..];
             let n = fd.read(buf)?;
-            if n == 0 { break; }
+            if n == 0 {
+                break;
+            }
             index += n;
-            if index >= PASSWORD_BUFFER_LEN { return Err(io::ErrorKind::InvalidData.into()); }
+            if index >= PASSWORD_BUFFER_LEN {
+                return Err(io::ErrorKind::InvalidData.into());
+            }
             if self.buf[index - 1] == b'\n' {
                 // replace the trailing newline with a nul byte
                 self.buf[index - 1] = 0;

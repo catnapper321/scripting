@@ -1,36 +1,18 @@
 #![allow(unused)]
+use libc::{c_int, termios};
 use std::mem::MaybeUninit;
 use std::{
-    os::fd::{AsFd, AsRawFd, RawFd},
-    io::{self, Read, Write, stdout, stdin},
-    mem,
     ffi::CStr,
-};
-use libc::{
-    c_int,
-    termios,
+    io::{self, stdin, stdout, Read, Write},
+    mem,
+    os::fd::{AsFd, AsRawFd, RawFd},
 };
 // input flags (iflag)
-use libc::{
-    IXON,
-    ICRNL,
-    IUTF8,
-    BRKINT,
-    INPCK,
-    ISTRIP,
-};
+use libc::{BRKINT, ICRNL, INPCK, ISTRIP, IUTF8, IXON};
 // output flags (oflag)
-use libc::{
-    OPOST,
-};
+use libc::OPOST;
 // misc flags (lflag)
-use libc::{
-    ECHO,
-    ECHONL, 
-    ICANON,
-    IEXTEN,
-    ISIG
-};
+use libc::{ECHO, ECHONL, ICANON, IEXTEN, ISIG};
 // exports
 pub mod password;
 use password::*;
@@ -119,10 +101,10 @@ impl<O: AsRawFd, I> Term<I, O> {
     /// signalling, and some other stuff. Note that this function disables
     /// output processing (auto carriage return insert).
     pub fn raw_mode(&mut self) -> &mut Self {
-        self.t.c_iflag &= ! (IXON | ICRNL | BRKINT | INPCK | ISTRIP);
-        self.t.c_lflag &= ! (ECHO | ICANON | IEXTEN | ISIG);
-        self.t.c_oflag &= ! (OPOST);
-        self.t.c_cflag &= ! libc::CS8;
+        self.t.c_iflag &= !(IXON | ICRNL | BRKINT | INPCK | ISTRIP);
+        self.t.c_lflag &= !(ECHO | ICANON | IEXTEN | ISIG);
+        self.t.c_oflag &= !(OPOST);
+        self.t.c_cflag &= !libc::CS8;
         self
     }
     /// cooked mode: sets ECHO, ECHONL, ICANON.
@@ -137,7 +119,7 @@ impl<O: AsRawFd, I> Term<I, O> {
     /// Turns off all output processing, like translating newline into
     /// carriage return + newline
     pub fn disable_output_processing(&mut self) -> &mut Self {
-        self.t.c_oflag &= ! OPOST;
+        self.t.c_oflag &= !OPOST;
         self
     }
     /// Enables output processing, so that newlines automatically have carriage
@@ -148,13 +130,13 @@ impl<O: AsRawFd, I> Term<I, O> {
     }
     /// password mode: unset ECHO, set ECHONL
     pub fn password_mode(&mut self) -> &mut Self {
-        self.t.c_lflag &= ! ECHO;
+        self.t.c_lflag &= !ECHO;
         self.t.c_lflag |= (ECHONL | ICANON);
         self
     }
     /// disable output flow control (ctrl-s and ctrl-q)
     pub fn disable_flow_control(&mut self) -> &mut Self {
-        self.t.c_iflag &= ! IXON;
+        self.t.c_iflag &= !IXON;
         self
     }
     /// enable output flow control (ctrl-s and ctrl-q)
@@ -230,4 +212,3 @@ fn io_result(c_return: c_int) -> io::Result<()> {
         Err(io::Error::last_os_error())
     }
 }
-

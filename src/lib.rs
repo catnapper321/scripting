@@ -1,17 +1,17 @@
 #![allow(dead_code, unused)]
-use std::{
-    io::{self, Write, Read, stdout, stdin}, 
-    os::fd::AsRawFd,
-    fmt::Display,
-    process::Command,
-    path::{Path, PathBuf},
-    ffi::{CString, CStr, OsStr, OsString},
-    os::unix::ffi::{OsStrExt, OsStringExt},
-    ops::{Deref, DerefMut},
-};
 pub use creche::Argument;
+use std::{
+    ffi::{CStr, CString, OsStr, OsString},
+    fmt::Display,
+    io::{self, stdin, stdout, Read, Write},
+    ops::{Deref, DerefMut},
+    os::fd::AsRawFd,
+    os::unix::ffi::{OsStrExt, OsStringExt},
+    path::{Path, PathBuf},
+    process::Command,
+};
 mod tty;
-pub use tty::{Term, SetAction, password::Password};
+pub use tty::{password::Password, SetAction, Term};
 
 pub type DoasUser = String;
 pub type DoasUid = u32;
@@ -68,7 +68,11 @@ pub fn keystroke<I: Read, O: AsRawFd>(term: &mut Term<I, O>) -> io::Result<Keyst
     keystroke
 }
 
-pub fn prompt_yn<I: Read, O: AsRawFd>(term: &mut Term<I, O>, default: Option<bool>, msg: impl Display) -> bool {
+pub fn prompt_yn<I: Read, O: AsRawFd>(
+    term: &mut Term<I, O>,
+    default: Option<bool>,
+    msg: impl Display,
+) -> bool {
     loop {
         if let Some(default) = default {
             if default {
@@ -116,16 +120,18 @@ pub fn prompt_menu<I: Read, O: AsRawFd + Write>(
         let s: &str = line.as_ref();
         let mut chars = s.char_indices();
         if let Some((_, opt)) = chars.next() {
-            if choices.contains(&[opt]) { panic!("'{opt}' is a duplicate menu option"); }
+            if choices.contains(&[opt]) {
+                panic!("'{opt}' is a duplicate menu option");
+            }
             choices.push(opt);
             if let Some((text_index, _)) = chars.next() {
-                println!("{opt}){}", unsafe {s.get_unchecked(text_index..)});
+                println!("{opt}){}", unsafe { s.get_unchecked(text_index..) });
             }
         }
     }
     // check that default option exists
     if let Some(d) = default {
-        if ! choices.contains(&[d]) {
+        if !choices.contains(&[d]) {
             panic!("default choice '{d}' is not a menu option");
         }
     }
@@ -143,7 +149,9 @@ pub fn prompt_menu<I: Read, O: AsRawFd + Write>(
             }
         };
         if let Some(c) = keystroke.as_char() {
-            if choices.contains(&[c]) { return c; }
+            if choices.contains(&[c]) {
+                return c;
+            }
             println!("'{c}' is not a menu option");
         }
     }
@@ -169,15 +177,16 @@ pub fn is_root_user() -> bool {
 pub fn ensure_running_doas() -> Result<(DoasUser, DoasUid), std::io::Error> {
     let euid = nix::unistd::geteuid();
     if euid.is_root() {
-        let user =
-            std::env::var("DOAS_USER").expect("Should be running with doas");
+        let user = std::env::var("DOAS_USER").expect("Should be running with doas");
         let uid = std::env::var("DOAS_UID")
             .expect("Should have found DOAS_UID environment variable")
             .parse::<u32>()
             .expect("DOAS_UID environment variable should be parseable as an integer");
         return Ok((user, uid));
     }
-    unsafe { std::env::set_var("DOAS_UID", euid.to_string()); }
+    unsafe {
+        std::env::set_var("DOAS_UID", euid.to_string());
+    }
     let current_exe = std::env::current_exe()?;
     let args = std::env::args_os();
     doas(current_exe, args).expect("Unable to execute doas");
