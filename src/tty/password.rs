@@ -31,52 +31,52 @@ impl Password {
             buf: Box::new([0; PASSWORD_BUFFER_LEN]),
         }
     }
-    /// Returns true if the buffer's last byte is a nul
-    pub fn is_nul_terminated(&self) -> bool {
-        self.buf[PASSWORD_BUFFER_LEN - 1] == 0
-    }
-    /// Returns a &CStr to the buffer data. Panics if the buffer does not
-    /// contain a nul byte
+    // /// Returns true if the buffer's last byte is a nul
+    // pub fn is_nul_terminated(&self) -> bool {
+    //     self.buf[PASSWORD_BUFFER_LEN - 1] == 0
+    // }
+    /// Returns a `&CStr` to the buffer data.
     pub fn as_cstr(&self) -> &CStr {
         CStr::from_bytes_until_nul(self.buf.as_slice())
             .expect("Password buffer requires terminating nul byte")
     }
-    /// Returns a &str if the buffer contains UTF-8 data. Panics if the
-    /// buffer does not contain a nul byte
+    /// Returns a `&str` if the buffer contains UTF-8 data.
     pub fn as_str(&self) -> Result<&str, std::str::Utf8Error> {
         self.as_cstr().to_str()
     }
     /// Convenience method for reading a newline terminated input from the
-    /// given Reader. Removes the trailing newline from the input. If the
-    /// input is larger than [`PASSWORD_BUFFER_LEN`], returns an error of
-    /// `std::io::ErrorKind::InvalidData`.
+    /// given Reader. Removes the trailing newline from the input. Inputs
+    /// larger than [`PASSWORD_BUFFER_LEN`] - 1 are truncated.
     pub fn read_line(&mut self, mut fd: &mut impl Read) -> io::Result<()> {
         let mut index = 0;
         loop {
-            let buf = &mut self.buf[index..];
+            let buf = &mut self.buf[index..PASSWORD_BUFFER_LEN - 1];
             let n = fd.read(buf)?;
             if n == 0 {
                 break;
             }
             index += n;
-            if index >= PASSWORD_BUFFER_LEN {
-                return Err(io::ErrorKind::InvalidData.into());
-            }
             if self.buf[index - 1] == b'\n' {
                 // replace the trailing newline with a nul byte
                 self.buf[index - 1] = 0;
                 break;
             }
+            // truncate large inputs
+            if index >= PASSWORD_BUFFER_LEN - 1 {
+                break;
+            }
         }
         Ok(())
     }
-    /// Returns a slice for the buffer
-    pub fn as_slice(&self) -> &[u8] {
-        self.buf.as_slice()
+    /// Returns a slice of bytes containing the password data without a
+    /// trailing nul byte. Equivalent to `Self::as_cstr().to_bytes()`.
+    pub fn as_bytes(&self) -> &[u8] {
+        self.as_cstr().to_bytes()
     }
-    /// Returns a mutable slice for the buffer. Useful if you would rather
-    /// roll your own input routine and just need a buffer for the secret.
-    /// Remember that the buffer requires a nul byte. Example:
+    /// Returns a mutable slice for the buffer. The slice size is one less
+    /// than [`PASSWORD_BUFFER_LEN`] so that the buffer will always have a
+    /// terminal nul byte. Useful if you would rather roll your own input
+    /// routine and just need a buffer for the secret. Example:
     /// ```
     /// let stdin = std::io::stdin();
     /// let mut pw = Password::new();
