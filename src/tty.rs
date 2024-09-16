@@ -61,7 +61,7 @@ impl SetAction {
 /// should always implement the `std::os::fd::AsRawFd` trait. If it also
 /// implements `std::io::Write`, then the returned struct will also
 /// implement `Write` and may be used to print output to the terminal. If
-/// the read argument implements `std::io::Read`, then the returned struct
+/// the input argument implements `std::io::Read`, then the returned struct
 /// will also implement `Read` and may be used to get input from the
 /// terminal. These trait implementations are strictly a convenience, and
 /// the standard stream handles obtained from `std::io::{stdout, stdin}`
@@ -280,7 +280,7 @@ impl<I: Read, O: AsRawFd + Write> Term<I, O> {
     /// input is automatically trimmed. Example:
     ///
     /// ```
-    /// # use std::io::{stdin, stdout};
+    /// use std::io::{stdin, stdout};
     /// let mut t = Term::new(stdin(), stdout())?;
     /// let pw = t.prompt_for_password("Enter the password")?;
     /// println!("Password entered was {:?}", pw.as_str());

@@ -84,12 +84,13 @@ impl Password {
     /// let bytes_read = stdin.read(pw.as_mut_slice()).unwrap();
     /// ```
     pub fn as_mut_slice(&mut self) -> &mut [u8] {
-        self.buf.as_mut_slice()
+        &mut self.buf.as_mut_slice()[0..PASSWORD_BUFFER_LEN - 1]
     }
 }
 impl Drop for Password {
     fn drop(&mut self) {
         self.buf.fill(0);
+        // ensure that the compiler and the hardware cannot defer the fill
         use std::sync::atomic::{self, Ordering};
         atomic::compiler_fence(Ordering::SeqCst);
         atomic::fence(Ordering::SeqCst);
