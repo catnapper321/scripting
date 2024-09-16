@@ -17,7 +17,7 @@ use libc::{ECHO, ECHONL, ICANON, IEXTEN, ISIG};
 pub mod password;
 use password::*;
 
-/// Specifies behavior of libc::tcsetattr
+/// Specifies behavior of [`libc::tcsetattr`]. Used in this library by [`Term::set()`] and [`Term::reset()`].
 #[derive(Debug, Clone, Copy)]
 pub enum SetAction {
     /// Flushes the terminal output buffer, discarding unprocessed input
@@ -38,6 +38,8 @@ impl SetAction {
     }
 }
 
+/// A type for setting terminal modes.
+///
 /// # TLDR: All I want is to get a password
 ///
 /// Check out the example for [`Self::prompt_for_password()`].
@@ -121,7 +123,8 @@ impl<I, O: Write> std::io::Write for Term<I, O> {
 /// t.password_mode().set(SetAction::TCSAFLUSH)?;
 /// print!("Enter the password: ");
 /// std::io::stdout().flush();
-/// // …read the password from stdin
+/// // …read the password from stdin somehow
+/// // restore the terminal to it's original mode
 /// t.reset(SetAction::TCSAFLUSH)?;
 /// ```
 impl<I, O: AsRawFd> Term<I, O> {
@@ -147,8 +150,8 @@ impl<I, O: AsRawFd> Term<I, O> {
         self.t = (t.clone(), t);
         Ok(())
     }
-    /// Gives the provided fn direct access to the libc::termios struct.
-    /// Allows bit twiddling of the [`libc::termios`] mode fields.
+    /// Gives the provided fn direct access to the [`libc::termios`]
+    /// struct.
     pub fn with_termios(&mut self, mut f: impl FnOnce(&mut libc::termios)) {
         f(&mut self.t.1);
     }
