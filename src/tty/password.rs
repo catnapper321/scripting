@@ -70,7 +70,7 @@ impl Password {
     }
     /// Returns a slice of bytes containing the password data without a
     /// trailing nul byte. Equivalent to `Self::as_cstr().to_bytes()`.
-    pub fn as_bytes(&self) -> &[u8] {
+    pub fn to_bytes(&self) -> &[u8] {
         self.as_cstr().to_bytes()
     }
     /// Returns a mutable slice for the buffer. The slice size is one less
