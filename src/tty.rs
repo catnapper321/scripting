@@ -38,7 +38,11 @@ impl SetAction {
     }
 }
 
-/// A type for setting terminal modes.
+/// A type that provides methods for common terminal operations. It is
+/// stateless — it does not attempt to track terminal modes or cursor
+/// position, render widgets, and so on.
+///
+/// This library currently supports Linux only via the `libc` crate.
 ///
 /// # TLDR: All I want is to get a password
 ///
