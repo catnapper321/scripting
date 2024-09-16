@@ -1,7 +1,6 @@
 //! Utilities useful for scripting and programs that run in a terminal.
 
 #![allow(dead_code, unused)]
-pub use creche::Argument;
 use std::{
     ffi::{CStr, CString, OsStr, OsString},
     fmt::Display,
@@ -11,6 +10,7 @@ use std::{
     os::unix::ffi::{OsStrExt, OsStringExt},
     path::{Path, PathBuf},
     process::Command,
+    env::{args_os, ArgsOs},
 };
 mod tty;
 pub use tty::{password::*, SetAction, Term};
@@ -190,37 +190,29 @@ pub fn ensure_running_doas() -> Result<(DoasUser, DoasUid), std::io::Error> {
         std::env::set_var("DOAS_UID", euid.to_string());
     }
     let current_exe = std::env::current_exe()?;
-    let args = std::env::args_os();
-    doas(current_exe, args).expect("Unable to execute doas");
+    doas(current_exe, args_os()).expect("Unable to execute doas");
     unreachable!()
 }
 
-fn doas(
-    executable: impl Into<Argument>,
-    args: impl IntoIterator<Item = impl Into<Argument>>,
-) -> Result<(), std::ffi::NulError> {
+fn doas(executable: PathBuf, cli_args: ArgsOs) -> Result<(), std::ffi::NulError> {
     // TODO: make this configurable? rely on PATH instead?
-    let doas_path = PathBuf::from("doas");
-    // if !doas_path.exists() {
-    //     panic!("doas utility not found");
-    // }
-    let doas_bin = CString::new(doas_path.as_os_str().as_bytes())?;
+    let doas_bin = CString::new(b"doas".to_vec())?;
 
-    let cstring_args: Vec<CString> = args
-        .into_iter()
-        .map(Into::<Argument>::into)
-        .map(|arg| arg.into_c_string())
+    let cstring_args: Vec<CString> = cli_args
+        .map(|x| CString::new(x.as_bytes()))
+        .flatten()
         .collect();
 
-    // build CString args for the exec call
-    let executable = executable.into();
-    let mut xs: Vec<&CStr> = Vec::new();
-    xs.push(&executable);
-    xs.push(&executable); // expected to be the name of the executable
+    let executable = CString::new(executable.into_os_string().into_vec())?;
+
+    // build &CStr args for the exec call
+    let mut args: Vec<&CStr> = Vec::new();
+    args.push(&executable);
+    args.push(&executable); // expected to be the name of the executable
     for arg in cstring_args.iter() {
-        xs.push(arg.as_c_str());
+        args.push(arg.as_c_str());
     }
     // exec
-    nix::unistd::execvp(&doas_bin, xs.as_slice()).expect("Should have execed a new process");
+    nix::unistd::execvp(&doas_bin, args.as_slice()).expect("Should have execed a new process");
     unreachable!()
 }
