@@ -207,7 +207,6 @@ fn doas(executable: PathBuf, cli_args: ArgsOs) -> Result<(), std::ffi::NulError>
 
     // build &CStr args for the exec call
     let mut args: Vec<&CStr> = Vec::new();
-    args.push(&executable);
     args.push(&executable); // expected to be the name of the executable
     for arg in cstring_args.iter() {
         args.push(arg.as_c_str());
