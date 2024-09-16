@@ -13,7 +13,7 @@ use std::{
     process::Command,
 };
 mod tty;
-pub use tty::{password::Password, SetAction, Term};
+pub use tty::{password::*, SetAction, Term};
 
 pub type DoasUser = String;
 pub type DoasUid = u32;

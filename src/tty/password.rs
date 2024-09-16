@@ -3,13 +3,13 @@ use std::{
     io::{self, Read},
 };
 
-/// Buffer size was selected to hold at least 127 utf8 characters.
+/// Buffer size was selected to hold at least 127 UTF-8 characters.
 pub const PASSWORD_BUFFER_LEN: usize = 512;
 /// Type that owns a buffer on the heap that will not reallocate. It is
 /// intended to hold user entered password data. When dropped, it
 /// overwrites the buffer contents with nul bytes.
 ///
-/// The fixed buffer size, defined by `PASSWORD_BUFFER_LENGTH`, should
+/// The fixed buffer size, defined by [`PASSWORD_BUFFER_LEN`], should
 /// allow it to hold very long UTF8 password data.
 ///
 /// Example:
@@ -41,14 +41,14 @@ impl Password {
         CStr::from_bytes_until_nul(self.buf.as_slice())
             .expect("Password buffer requires terminating nul byte")
     }
-    /// Returns a &str if the buffer contains UTF8 data. Panics if the buffer
-    /// does not contain a nul byte
+    /// Returns a &str if the buffer contains UTF-8 data. Panics if the
+    /// buffer does not contain a nul byte
     pub fn as_str(&self) -> Result<&str, std::str::Utf8Error> {
         self.as_cstr().to_str()
     }
     /// Convenience method for reading a newline terminated input from the
     /// given Reader. Removes the trailing newline from the input. If the
-    /// input is larger than `PASSWORD_BUFFER_LEN`, returns an error of
+    /// input is larger than [`PASSWORD_BUFFER_LEN`], returns an error of
     /// `std::io::ErrorKind::InvalidData`.
     pub fn read_line(&mut self, mut fd: &mut impl Read) -> io::Result<()> {
         let mut index = 0;
@@ -80,7 +80,7 @@ impl Password {
     /// ```
     /// let stdin = std::io::stdin();
     /// let mut pw = Password::new();
-    /// // read directly into the Password buffer
+    /// // read from stdin directly into the Password buffer
     /// let bytes_read = stdin.read(pw.as_mut_slice()).unwrap();
     /// ```
     pub fn as_mut_slice(&mut self) -> &mut [u8] {
@@ -90,7 +90,8 @@ impl Password {
 impl Drop for Password {
     fn drop(&mut self) {
         self.buf.fill(0);
-        std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::SeqCst);
-        std::sync::atomic::fence(std::sync::atomic::Ordering::SeqCst);
+        use std::sync::atomic::{self, Ordering};
+        atomic::compiler_fence(Ordering::SeqCst);
+        atomic::fence(Ordering::SeqCst);
     }
 }

@@ -8,7 +8,7 @@ use std::{
     os::fd::{AsFd, AsRawFd, RawFd},
 };
 // input flags (iflag)
-use libc::{BRKINT, ICRNL, INPCK, ISTRIP, IUTF8, IXON};
+use libc::{BRKINT, ICRNL, INPCK, ISTRIP, IUTF8, IXON, INLCR};
 // output flags (oflag)
 use libc::OPOST;
 // misc flags (lflag)
@@ -38,6 +38,12 @@ impl SetAction {
     }
 }
 
+/// # TLDR: All I want is to get a password
+///
+/// Check out the example for [`Self::prompt_for_password()`].
+///
+/// # How to use this
+///
 /// Terminal option setting usually follows this pattern:
 ///
 /// 1. Get the current terminal settings and remember them
@@ -81,12 +87,11 @@ impl SetAction {
 /// println!("read {} bytes", bytes_read);
 /// println!("buffer is {:?}", buf);
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Term<I, O> {
     fd_out: O,
     fd_in: I,
-    orig_t: termios,
-    t: termios,
+    t: (termios, termios), // (original, working copy)
 }
 /// If the input argument to [`Self::new()`] implements `std::io::Read`, then
 /// Term also gets a `Read` implementation.
@@ -120,14 +125,32 @@ impl<I, O: Write> std::io::Write for Term<I, O> {
 /// t.reset(SetAction::TCSAFLUSH)?;
 /// ```
 impl<I, O: AsRawFd> Term<I, O> {
+    /// Creates a new `Term` with the provided input and output. If the
+    /// output does not accept terminal ioctls, then this will fail.
     pub fn new(input: I, output: O) -> io::Result<Self> {
-        let orig_t = get_termios(output.as_raw_fd())?;
+        let t = get_termios(output.as_raw_fd())?;
         Ok(Self {
             fd_out: output,
             fd_in: input,
-            orig_t,
-            t: orig_t.clone(),
+            t: (t.clone(), t),
         })
+    }
+    /// Returns false if the output is not connected to a terminal.
+    pub fn is_a_tty(&self) -> bool {
+        isatty(self.fd_out.as_raw_fd())
+    }
+    /// Attempts to save the settings from the terminal currently connected
+    /// to the output. Future invocations of [`Self::reset()`] will use
+    /// this state. 
+    pub fn save(&mut self) -> io::Result<()> {
+        let t = get_termios(self.fd_out.as_raw_fd())?;
+        self.t = (t.clone(), t);
+        Ok(())
+    }
+    /// Gives the provided fn direct access to the libc::termios struct.
+    /// Allows bit twiddling of the [`libc::termios`] mode fields.
+    pub fn with_termios(&mut self, mut f: impl FnOnce(&mut libc::termios)) {
+        f(&mut self.t.1);
     }
     /// Raw mode: unsets ECHO and ICANON, disables output flow control,
     /// disables ctrl-v, disables input carriage return translation
@@ -135,25 +158,32 @@ impl<I, O: AsRawFd> Term<I, O> {
     /// that this function disables output processing (auto carriage return
     /// insert).
     pub fn raw_mode(&mut self) -> &mut Self {
-        self.t.c_iflag &= !(IXON | ICRNL | BRKINT | INPCK | ISTRIP);
-        self.t.c_lflag &= !(ECHO | ICANON | IEXTEN | ISIG);
-        self.t.c_oflag &= !(OPOST);
-        self.t.c_cflag &= !libc::CS8;
+        self.with_termios(|t| {
+            t.c_iflag &= !(IXON | ICRNL | BRKINT | INPCK | ISTRIP | INLCR);
+            t.c_lflag &= !(ECHO | ICANON | IEXTEN | ISIG);
+            t.c_oflag &= !(OPOST);
+            t.c_cflag &= !libc::CS8;
+        });
         self
     }
     /// Cooked mode: sets ECHO, ECHONL, ICANON. Note that this is the bare
     /// minimum to get utf input awareness and character display; it does
     /// not restore flow control, unset the input timeout, etc. The
-    /// `.reset()` method is a more reliable way to recover from raw and
+    /// [`Self::reset()`] method is a more reliable way to recover from raw and
     /// password modes.
     pub fn cooked_mode(&mut self) -> &mut Self {
-        self.t.c_lflag |= (ECHO | ECHONL | ICANON);
+        self.with_termios(|t| {
+            t.c_iflag |= IUTF8;
+            t.c_lflag |= (ECHO | ECHONL | ICANON);
+        });
         self
     }
     /// Turns off all output processing, like translating newline into
     /// carriage return + newline
     pub fn disable_output_processing(&mut self) -> &mut Self {
-        self.t.c_oflag &= !OPOST;
+        self.with_termios(|t| {
+            t.c_oflag &= !OPOST;
+        });
         self
     }
     /// Enables output processing (OPOST flag). One effect this has is to
@@ -165,66 +195,81 @@ impl<I, O: AsRawFd> Term<I, O> {
     ///
     /// then try enabling output processing.
     pub fn enable_output_processing(&mut self) -> &mut Self {
-        self.t.c_oflag |= OPOST;
+        self.with_termios(|t| {
+            t.c_oflag |= OPOST;
+        });
         self
     }
     /// Sets ECHO and ECHONL. Useful if you want to echo keystrokes in raw
     /// mode for some reason.
     pub fn enable_echo(&mut self) -> &mut Self {
-        self.t.c_lflag |= (ECHO | ECHONL);
+        self.with_termios(|t| {
+            t.c_lflag |= (ECHO | ECHONL);
+        });
         self
     }
     /// Unsets ECHO and ECHONL. If you are prompting for a password, use
     /// `.password_mode()` instead.
     pub fn disable_echo(&mut self) -> &mut Self {
-        self.t.c_lflag &= !(ECHO | ECHONL);
+        self.with_termios(|t| {
+            t.c_lflag &= !(ECHO | ECHONL);
+        });
         self
     }
     /// Password mode: Disables keystroke echo, but ensures that newlines
     /// echo and that utf input is properly handled.
     pub fn password_mode(&mut self) -> &mut Self {
-        self.t.c_lflag &= !ECHO;
-        self.t.c_lflag |= (ECHONL | ICANON);
+        self.with_termios(|t| {
+            t.c_lflag &= !ECHO;
+            t.c_lflag |= (ECHONL | ICANON);
+        });
         self
     }
     /// Disable output flow control (ctrl-s and ctrl-q)
     pub fn disable_flow_control(&mut self) -> &mut Self {
-        self.t.c_iflag &= !IXON;
+        self.with_termios(|t| {
+            t.c_iflag &= !IXON;
+        });
         self
     }
     /// Enable output flow control (ctrl-s and ctrl-q)
     pub fn enable_flow_control(&mut self) -> &mut Self {
-        self.t.c_iflag |= IXON;
+        self.with_termios(|t| {
+            t.c_iflag |= IXON;
+        });
         self
     }
     /// Set input timeout, granularity is tenths of a second. Values over
     /// 25.5s are set to 25.5s, values under 0.1s are set to 0.1s.
     /// Useful only when the terminal has been set to raw mode.
     pub fn input_timeout(&mut self, vtime: std::time::Duration) -> &mut Self {
-        self.t.c_cc[libc::VMIN] = 0; // return immediately after one byte read
         let mut tenths = vtime.as_millis() / 100;
         let tenths = match tenths {
             0 => 1,
             1..=255 => tenths as u8,
             _ => 255,
         };
-        self.t.c_cc[libc::VTIME] = tenths;
+        self.with_termios(|t| {
+            t.c_cc[libc::VMIN] = 0; // return immediately after one byte read
+            t.c_cc[libc::VTIME] = tenths;
+        });
         self
     }
     /// Disables a previously set input timeout.
     pub fn disable_input_timeout(&mut self) -> &mut Self {
-        self.t.c_cc[libc::VMIN] = 1;
-        self.t.c_cc[libc::VTIME] = 0;
+        self.with_termios(|t| {
+            t.c_cc[libc::VMIN] = 1;
+            t.c_cc[libc::VTIME] = 0;
+        });
         self
     }
-    /// Applies all changes to the terminal
+    /// Applies changes to the terminal.
     pub fn set(&self, action: SetAction) -> io::Result<()> {
-        set_termios(self.fd_out.as_raw_fd(), action, &self.t)?;
-        Ok(())
+        set_termios(self.fd_out.as_raw_fd(), action, &self.t.1)
     }
     /// Restores the terminal to its original state
     pub fn reset(&mut self, action: SetAction) -> io::Result<()> {
-        self.t = self.orig_t.clone();
+        self.t.1 = self.t.0.clone();
         self.set(action)
     }
 }
